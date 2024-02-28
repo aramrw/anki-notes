@@ -20,7 +20,13 @@ sqlx = { version = "0.7", features = [
     "runtime-tokio",
     "tls-native-tls",
     "sqlite",
+    "migrate",
+    "macros",
+], macros = [
+    "sqlite",
 ] }
+uuid = { version = "1.7.0", features = ["v4"] }
+chrono = { version = "0.4.34" }
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
