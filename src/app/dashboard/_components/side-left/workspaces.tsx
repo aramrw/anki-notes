@@ -10,12 +10,12 @@ export default function Workspaces() {
     let [workspace, setWorkspace] = useState("JP");
     let [workspaces, setWorkspaces] = useState(["JP", "US", "UK", "AU", "CA", "NZ"]);
 
-    useEffect(() => {
-        // Fetch workspaces from db
-        invoke("get_workspaces").then((spaces) => {
-            setWorkspaces(spaces as string[])
-        })
-    }, []);
+    // useEffect(() => {
+    //     // Fetch workspaces from db
+    //     invoke("get_workspaces").then((spaces) => {
+    //         setWorkspaces(spaces as string[])
+    //     })
+    // }, []);
 
     return (
         <div className='flex w-[10.8rem] items-start justify-center px-2'>
@@ -30,12 +30,12 @@ export default function Workspaces() {
                 <DropdownMenuContent>
                     <DropdownMenuRadioGroup value={workspace} onValueChange={setWorkspace}>
                         {workspaces.map((space, index) => (
-                            <>
+                            <div key={`main-${space}-${index}`}>
                                 <DropdownMenuSeparator key={`top-${index}-${space}`} />
                                 <DropdownMenuRadioItem key={`${space}-${index}`} value={space} className='cursor-pointer'>
                                     {space}
                                 </DropdownMenuRadioItem>
-                            </>
+                            </div>
                         ))}
                         <DropdownMenuSeparator key={`end`} />
                     </DropdownMenuRadioGroup>
