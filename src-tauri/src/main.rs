@@ -3,11 +3,12 @@
 
 use std::future::IntoFuture;
 
+use serde_json::{to_string, to_string_pretty};
 use tauri::generate_handler;
 use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize, Serializer};
-use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+use sqlx::{migrate::MigrateDatabase, Row, Sqlite, SqlitePool};
 #[allow(warnings, unused)]
 use tauri::{command, AppHandle, Manager};
 use uuid::Uuid;
@@ -24,6 +25,14 @@ impl Serialize for WorkspaceError {
     {
         serializer.serialize_str(&self.message)
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Workspace {
+    id: String,
+    title: String,
+    created_at: String,
+    updated_at: String,
 }
 
 fn main() {
@@ -45,11 +54,55 @@ fn main() {
             Ok(())
         })
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(generate_handler![create_workspace])
+        .invoke_handler(generate_handler![create_workspace, get_workspaces])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
+// ** DB Functions/Commands **
+#[command]
+async fn create_workspace(workspace_title: &str, handle: AppHandle) -> Result<(), WorkspaceError> {
+    let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
+    let pool = pool_mutex.lock().into_future().await;
+
+    let uuid = Uuid::new_v4().to_string();
+    //let now = chrono::Utc::now();
+
+    sqlx::query("INSERT INTO workspace (id, title, createdAt, updatedAt) VALUES (?, ?, datetime('now'), datetime('now'))")
+        .bind(uuid)
+        .bind(workspace_title)
+        .execute(&*pool)
+        .await
+        .unwrap();
+    Ok(())
+}
+
+#[command]
+async fn get_workspaces(handle: AppHandle) -> Result<String, WorkspaceError> {
+    let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
+    let pool = pool_mutex.lock().into_future().await;
+
+    let result = sqlx::query("SELECT * FROM workspace")
+        .fetch_all(&*pool)
+        .await
+        .unwrap();
+
+    let mut workspaces: Vec<Workspace> = Vec::new();
+    result.iter().for_each(|row| {
+        workspaces.push(Workspace {
+            id: row.get(0),
+            title: row.get(1),
+            created_at: row.get(2),
+            updated_at: row.get(3),
+        });
+    });
+
+    let json_result = to_string_pretty(&workspaces).unwrap();
+
+    Ok(json_result)
+}
+
+// ! IMPORTANT: DO NOT REMOVE/EDIT THESE FUNCTIONS
 fn create_database(path: &str, handle: AppHandle) {
     tokio::task::block_in_place(move || {
         tauri::async_runtime::block_on(async move {
@@ -67,21 +120,4 @@ fn create_database(path: &str, handle: AppHandle) {
         })
     })
     .unwrap();
-}
-
-#[command]
-async fn create_workspace(workspace_title: &str, handle: AppHandle) -> Result<(), WorkspaceError> {
-    let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
-    let pool = pool_mutex.lock().into_future().await;
-
-    let uuid = Uuid::new_v4().to_string();
-    //let now = chrono::Utc::now();
-
-    sqlx::query("INSERT INTO workspace (id, title, createdAt, updatedAt) VALUES (?, ?, datetime('now'), datetime('now'))")
-        .bind(uuid)
-        .bind(workspace_title)
-        .execute(&*pool)
-        .await
-        .unwrap();
-    Ok(())
 }
