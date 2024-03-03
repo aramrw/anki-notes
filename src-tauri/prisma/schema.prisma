@@ -10,9 +10,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id               String      @id @unique
+  currentWorkspace String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  workspaces       Workspace[]
+}
+
 model Workspace {
-  id        String   @id @default(uuid())
+  id        String   @id @unique
   title     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  User      User?    @relation(fields: [userId], references: [id])
+  userId    String?
 }

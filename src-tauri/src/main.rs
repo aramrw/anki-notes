@@ -3,7 +3,7 @@
 
 use std::future::IntoFuture;
 
-use serde_json::{to_string, to_string_pretty};
+use serde_json::to_string_pretty;
 use tauri::generate_handler;
 use tokio::sync::Mutex;
 
@@ -13,12 +13,12 @@ use sqlx::{migrate::MigrateDatabase, Row, Sqlite, SqlitePool};
 use tauri::{command, AppHandle, Manager};
 use uuid::Uuid;
 
-#[derive(Deserialize)]
-struct WorkspaceError {
+#[derive(Deserialize, Debug)]
+struct DatabaseErrors {
     message: String,
 }
 
-impl Serialize for WorkspaceError {
+impl Serialize for DatabaseErrors {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -27,10 +27,21 @@ impl Serialize for WorkspaceError {
     }
 }
 
+// ** DB Models ** //
 #[derive(Serialize, Deserialize)]
 struct Workspace {
     id: String,
     title: String,
+    created_at: String,
+    updated_at: String,
+    user_id: String,
+    //user: User, // you can't row.get() a struct.
+}
+
+#[derive(Serialize, Deserialize)]
+struct User {
+    id: String,
+    current_workspace: Option<String>,
     created_at: String,
     updated_at: String,
 }
@@ -54,14 +65,19 @@ fn main() {
             Ok(())
         })
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(generate_handler![create_workspace, get_workspaces])
+        .invoke_handler(generate_handler![
+            create_workspace,
+            get_workspaces,
+            get_user,
+            update_user_workspace
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 // ** DB Functions/Commands **
 #[command]
-async fn create_workspace(workspace_title: &str, handle: AppHandle) -> Result<(), WorkspaceError> {
+async fn create_workspace(workspace_title: &str, handle: AppHandle) -> Result<(), DatabaseErrors> {
     let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
     let pool = pool_mutex.lock().into_future().await;
 
@@ -71,14 +87,12 @@ async fn create_workspace(workspace_title: &str, handle: AppHandle) -> Result<()
     sqlx::query("INSERT INTO workspace (id, title, createdAt, updatedAt) VALUES (?, ?, datetime('now'), datetime('now'))")
         .bind(uuid)
         .bind(workspace_title)
-        .execute(&*pool)
-        .await
-        .unwrap();
+        .execute(&*pool).await.unwrap();
     Ok(())
 }
 
 #[command]
-async fn get_workspaces(handle: AppHandle) -> Result<String, WorkspaceError> {
+async fn get_workspaces(handle: AppHandle) -> Result<String, DatabaseErrors> {
     let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
     let pool = pool_mutex.lock().into_future().await;
 
@@ -94,12 +108,56 @@ async fn get_workspaces(handle: AppHandle) -> Result<String, WorkspaceError> {
             title: row.get(1),
             created_at: row.get(2),
             updated_at: row.get(3),
+            user_id: row.get(4),
         });
     });
 
     let json_result = to_string_pretty(&workspaces).unwrap();
 
     Ok(json_result)
+}
+
+#[command]
+async fn get_user(handle: AppHandle) -> Result<String, DatabaseErrors> {
+    let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
+    let pool = pool_mutex.lock().into_future().await;
+
+    let result = sqlx::query("SELECT * FROM user ")
+        .fetch_all(&*pool)
+        .await
+        .unwrap();
+
+    let mut users: Vec<User> = Vec::new();
+
+    result.iter().for_each(|row| {
+        users.push(User {
+            id: row.get(0),
+            current_workspace: row.get(1), // this is an Option<String> (nullable column in db
+            created_at: row.get(1),
+            updated_at: row.get(2),
+        })
+    });
+
+    let json_result = to_string_pretty(&users).unwrap();
+
+    Ok(json_result)
+}
+
+#[command]
+async fn update_user_workspace(
+    workspace_title: &str,
+    handle: AppHandle,
+) -> Result<(), DatabaseErrors> {
+    let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
+    let pool = pool_mutex.lock().into_future().await;
+
+    sqlx::query("UPDATE user SET currentWorkspace = ?, updatedAt = datetime('now')")
+        .bind(workspace_title)
+        .execute(&*pool)
+        .await
+        .unwrap();
+
+    Ok(())
 }
 
 // ! IMPORTANT: DO NOT REMOVE/EDIT THESE FUNCTIONS
@@ -114,10 +172,71 @@ fn create_database(path: &str, handle: AppHandle) {
             let pool = sqlite_pool.clone();
             handle.manage(Mutex::new(sqlite_pool));
 
-            sqlx::migrate!("./prisma/migrations").run(&pool).await?;
+            create_user_if_null(handle).await.unwrap();
+
+            //sqlx::migrate!("prisma/migrations").run(&pool).await?;
+
+            // ** handle all migrations by hand because I'm an idiot **
+
+            sqlx::query("CREATE TABLE IF NOT EXISTS user (id TEXT PRIMARY KEY UNIQUE, currentWorkspace TEXT, createdAt TEXT, updatedAt TEXT)")
+            .execute(&pool).await.unwrap();
+
+            sqlx::query("CREATE TABLE IF NOT EXISTS workspace (id TEXT PRIMARY KEY UNIQUE, title TEXT, createdAt TEXT, updatedAt TEXT, userId TEXT)")
+            .execute(&pool).await.unwrap();
 
             Ok::<(), sqlx::Error>(())
         })
     })
     .unwrap();
+}
+
+async fn create_user_if_null(handle: AppHandle) -> Result<String, DatabaseErrors> {
+    let pool_mutex = handle.state::<Mutex<SqlitePool>>().clone();
+    let pool = pool_mutex.lock().into_future().await;
+
+    let id = Uuid::new_v4().to_string();
+
+    // there will only ever be one user ..// unless I get bored and add more..
+    let result = sqlx::query("SELECT * FROM user")
+        .fetch_all(&*pool)
+        .await
+        .unwrap();
+
+    let mut users: Vec<User> = Vec::new();
+    result.iter().for_each(|row| {
+        users.push(User {
+            id: row.get(0),
+            current_workspace: row.get(1), // this is an Option<String> (nullable column in db
+            created_at: row.get(1),
+            updated_at: row.get(2),
+        })
+    });
+
+    if users.is_empty() {
+        sqlx::query("INSERT INTO user (id, createdAt, updatedAt, currentWorkspace) VALUES (?, datetime('now'), datetime('now'), ?)")
+        .bind(&id)
+        .bind("none")
+       .execute(&*pool).await.unwrap();
+
+        let result = sqlx::query("SELECT * FROM user")
+            .fetch_all(&*pool)
+            .await
+            .unwrap();
+
+        result.iter().for_each(|row| {
+            users.push(User {
+                id: row.get(0),
+                current_workspace: row.get(1),
+                created_at: row.get(1),
+                updated_at: row.get(2),
+            })
+        });
+
+        let json_result = to_string_pretty(&users).unwrap();
+
+        Ok(json_result)
+    } else {
+        let json_result = to_string_pretty(&users).unwrap();
+        Ok(json_result)
+    }
 }

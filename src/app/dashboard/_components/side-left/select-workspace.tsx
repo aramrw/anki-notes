@@ -1,16 +1,15 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, SetStateAction } from 'react'
 import { DropdownMenuTrigger, DropdownMenu, DropdownMenuSeparator, DropdownMenuContent, DropdownMenuRadioItem, DropdownMenuRadioGroup } from '@/components/ui/dropdown-menu';
 import { ChevronsUpDown, Layers, PlusSquare } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from '@/components/ui/button';
 
-
-export default function Workspaces() {
+export default function SelectWorkspace({ currentWorkspace, setCurrentWorkspace }: { currentWorkspace: string, setCurrentWorkspace: (value: string) => void }) {
     // TODO: fetch current + all workspaces from rust
-    const [currentWorkspace, setCurrentWorkspace] = useState("");
-    const [workspaces, setWorkspaces] = useState([""]);
+    //const [currentWS, setCurrentWS] = useState<string>(currentWorkspace);
+    const [workspaces, setWorkspaces] = useState<string[]>([""]);
     const [showInputBox, setShowInputBox] = useState(false);
     const inputElementRef = useRef<HTMLInputElement>(null);
 
@@ -18,7 +17,7 @@ export default function Workspaces() {
         title: string;
         id: number;
         createdAt: string;
-        updatedAt: string;
+        dAt: string;
     }
 
     // track input focus
@@ -35,7 +34,9 @@ export default function Workspaces() {
 
     }, [showInputBox === true]);
 
+    // fetch workspaces
     useEffect(() => {
+        console.log('current workspace: ', currentWorkspace);
         invoke('get_workspaces',).then((res: any) => {
             let json_result = JSON.parse(res) as Workspace[];
             //console.log(json_result);
@@ -45,11 +46,12 @@ export default function Workspaces() {
                 name_buffer.push(json_result[row].title);
             }
             if (name_buffer.length > 0) {
+                console.log(name_buffer);
                 setWorkspaces(name_buffer);
+            } else if (name_buffer.length === 1) {
                 setCurrentWorkspace(name_buffer[0]);
             }
-
-        })
+        });
     }, [])
 
     return (
@@ -79,11 +81,13 @@ export default function Workspaces() {
                                 e.preventDefault();
                                 invoke('create_workspace', { workspaceTitle: inputElementRef.current?.value })
                                 setWorkspaces([...workspaces, inputElementRef.current?.value as string]);
+                                setCurrentWorkspace(inputElementRef.current?.value as string);
                                 setShowInputBox(false);
                             }
                         }}
                     />}
                 </div>
+                {/*Allows the user to select their workspace (aka section off notes)*/}
                 <DropdownMenuContent>
                     <DropdownMenuRadioGroup value={currentWorkspace} onValueChange={setCurrentWorkspace}>
                         {workspaces.map((space, index) => (
