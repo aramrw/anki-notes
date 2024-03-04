@@ -44,11 +44,11 @@ export default function SideLeft({ currentNote, setCurrentNote }: { currentNote:
     }
 
     return (
-        <motion.section className={cn('w-60 flex h-full flex-row-reverse bg-pri shadow-md border-r-2 border-sec',
+        <motion.section className={cn('z-10 w-auto ml-10 pl-3.5 flex h-full flex-row-reverse bg-background shadow-md border-r-2 border-sec',
             isDragging && "cursor-grabbing"
         )}
             onMouseLeave={() => { setIsDragging(false); setIsHovering(false); }}
-            initial={{ x: -118 }}
+            initial={{ x: -226 }}
             drag="x"
             dragConstraints={{ left: -225.5, right: -40 }}
             dragElastic={0.02}
@@ -66,7 +66,8 @@ export default function SideLeft({ currentNote, setCurrentNote }: { currentNote:
             >
                 <span className='h-1/2 w-1 rounded-md bg-tert'></span>
             </div>
-            <div className='mr-1.5 flex h-fit flex-col'>
+            <div className={cn('mr-1 flex h-fit flex-col z-50 ',
+            )}>
                 <div className='flex h-full w-full justify-end py-4'>
                     <SelectWorkspace currentWorkspace={currentWorkspace} setCurrentWorkspace={useSetCurrentWorkspaceHook} />
                 </div>

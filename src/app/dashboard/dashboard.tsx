@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import SideLeft from './_components/side-left/side-left'
 import { invoke } from '@tauri-apps/api/core';
+import Editor from './_components/editor/editor';
 
 export interface Note {
     id: string;
@@ -48,7 +49,9 @@ export default function Dashboard() {
     return (
         <main className='flex h-screen w-full flex-row'>
             <SideLeft setCurrentNote={useSetCurrentNoteHook} currentNote={currentNote?.title} />
-            {currentNote?.title}
+            {currentNote && (
+                <Editor currentNote={currentNote} />
+            )}
         </main>
     )
 }
