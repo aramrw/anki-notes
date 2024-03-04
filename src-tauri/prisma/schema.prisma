@@ -11,11 +11,12 @@ datasource db {
 }
 
 model User {
-  id               String      @id @unique
+  id               String   @id @unique
   currentWorkspace String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  workspaces       Workspace[]
+  currentTitle     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  //workspaces       Workspace[]
 }
 
 model Workspace {
@@ -23,6 +24,12 @@ model Workspace {
   title     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  User      User?    @relation(fields: [userId], references: [id])
-  userId    String?
+}
+
+model Note {
+  id          String   @id @unique
+  title       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspaceId String?
 }

@@ -1,0 +1,54 @@
+"use client"
+
+import React, { useEffect, useState } from 'react'
+import SideLeft from './_components/side-left/side-left'
+import { invoke } from '@tauri-apps/api/core';
+
+export interface Note {
+    id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+    workspace_id: string;
+}
+
+export interface User {
+    id: string;
+    current_workspace: string
+    current_note: string
+    created_at: string;
+    updated_at: string;
+}
+
+export default function Dashboard() {
+    const [currentNote, setCurrentNote] = useState<Note>();
+    const useSetCurrentNoteHook = (currentNote: Note) => {
+        setCurrentNote(currentNote)
+    }
+
+    useEffect(() => {
+        invoke("get_user").then((res) => {
+            let user: User[] = JSON.parse(res as string)
+            //console.log(user[0])
+            if (user)
+                invoke("get_note_by_title", { currentNote: user[0].current_note }).then((res) => {
+                    let note: Note = JSON.parse(res as string);
+                    //console.log(note)
+                    setCurrentNote(note);
+                }).catch((e) => {
+                    console.log(e);
+                })
+        })
+    }, []);
+
+    useEffect(() => {
+        console.log("current note:", currentNote)
+    }, [currentNote])
+
+    return (
+        <main className='flex h-screen w-full flex-row'>
+            <SideLeft setCurrentNote={useSetCurrentNoteHook} currentNote={currentNote?.title} />
+            {currentNote?.title}
+        </main>
+    )
+}

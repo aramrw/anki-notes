@@ -2,11 +2,14 @@
 
 import { cn } from '@/lib/utils';
 import { useDragControls, motion } from 'framer-motion';
-import React, { SetStateAction, useEffect, useState } from 'react'
+import React, { SetStateAction, useCallback, useEffect, useState } from 'react'
 import SelectWorkspace from './select-workspace';
 import { invoke } from '@tauri-apps/api/core';
+import { Separator } from '@/components/ui/separator';
+import NoteSection from './note-section';
+import { Note } from '../../dashboard';
 
-export default function SideLeft() {
+export default function SideLeft({ currentNote, setCurrentNote }: { currentNote: string | undefined, setCurrentNote: (value: Note) => void }) {
     const [currentWorkspace, setCurrentWorkspace] = useState<string>("");
     const [isDragging, setIsDragging] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
@@ -14,17 +17,27 @@ export default function SideLeft() {
 
     useEffect(() => {
         // user has a `currentWorkspace` column 
+        if (currentWorkspace === "none") return;
         invoke("get_user").then((res: any) => {
             let json_result = JSON.parse(res);
             //console.log(json_result[0].current_workspace);
-            setCurrentWorkspace(json_result[0].current_workspace);
+            if (currentWorkspace !== "none")
+                setCurrentWorkspace(json_result[0].current_workspace);
+        }).catch((e) => {
+            console.log(e)
         })
     }, []);
 
-    useEffect(() => {
-        if (currentWorkspace === "") return;
-        invoke('update_user_workspace', { workspaceTitle: currentWorkspace });
+    const updateUserWorkspace = useCallback(() => {
+        if (currentWorkspace === "none" || currentWorkspace == "") return;
+        invoke('update_user_workspace', { workspaceTitle: currentWorkspace }).catch((e) => {
+            console.log(e)
+        });
     }, [currentWorkspace])
+
+    useEffect(() => {
+        updateUserWorkspace();
+    }, [updateUserWorkspace])
 
     const useSetCurrentWorkspaceHook = (currentWorkspace: string) => {
         setCurrentWorkspace(currentWorkspace);
@@ -53,8 +66,14 @@ export default function SideLeft() {
             >
                 <span className='h-1/2 w-1 rounded-md bg-tert'></span>
             </div>
-            <div className='flex h-full w-full justify-end py-4'>
-                <SelectWorkspace currentWorkspace={currentWorkspace} setCurrentWorkspace={useSetCurrentWorkspaceHook} />
+            <div className='mr-1.5 flex h-fit flex-col'>
+                <div className='flex h-full w-full justify-end py-4'>
+                    <SelectWorkspace currentWorkspace={currentWorkspace} setCurrentWorkspace={useSetCurrentWorkspaceHook} />
+                </div>
+                <Separator className='mb-4' />
+                <div>
+                    <NoteSection currentWorkspace={currentWorkspace} setCurrentNote={setCurrentNote} currentNote={currentNote} />
+                </div>
             </div>
         </ motion.section >
 
